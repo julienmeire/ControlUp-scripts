@@ -1,0 +1,32 @@
+$vCenterServer = "vcenter_server_name"
+$Username = "your_username"
+$Password = "your_password"
+$HostToManage = "host_name"
+$ServiceAction = "start" # "start" pour démarrer le service ou "stop" pour l'arrêter
+
+Import-Module VMware.PowerCLI
+
+# Ignorer les avertissements de certificat non approuvé
+Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -Confirm:$false
+
+# Connexion au serveur vCenter
+Connect-VIServer -Server $vCenterServer -User $Username -Password $Password
+
+# Sélection du host
+$Host = Get-VMHost $HostToManage
+
+# Démarrage ou arrêt du service SSH
+$Service = Get-VMHostService -VMHost $Host | Where-Object {$_.Key -eq "TSM-SSH"}
+
+if ($ServiceAction -eq "start") {
+    Start-VMHostService -HostService $Service -Confirm:$false
+    Write-Output "SSH activé sur $HostToManage"
+} elseif ($ServiceAction -eq "stop") {
+    Stop-VMHostService -HostService $Service -Confirm:$false
+    Write-Output "SSH désactivé sur $HostToManage"
+} else {
+    Write-Output "Problème lors de l'action, spécifiez uniquement start ou stop"
+}
+
+# Déconnexion du serveur vCenter
+Disconnect-VIServer -Server $vCenterServer -Confirm:$false

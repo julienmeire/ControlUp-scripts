@@ -12,7 +12,7 @@ function Check-DeviceStatus {
     $devices = Get-WmiObject Win32_PnPEntity
     foreach ($device in $devices) {
         if ($device.ConfigManagerErrorCode -ne 0) {
-            Write-Host "Problème détecté: $($device.Name) - Code d'erreur: $($device.ConfigManagerErrorCode)" -ForegroundColor Red
+            Write-Host "Probleme detecte: $($device.Name) - Code d'erreur: $($device.ConfigManagerErrorCode)" -ForegroundColor Red
         }
     }
 }
@@ -25,7 +25,7 @@ function Check-DiskHealth {
         if ($status -ne "OK") {
             Write-Host "Alerte disque dur: $($disk.Model) - Statut: $status" -ForegroundColor Red
         } else {
-            Write-Host "Disque dur en bonne santé: $($disk.Model) - Statut: $status" -ForegroundColor Green
+            Write-Host "Disque dur en bonne sante: $($disk.Model) - Statut: $status" -ForegroundColor Green
         }
     }
 }
@@ -35,9 +35,9 @@ function Check-NetworkStatus {
     $networkCards = Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object {$_.IPEnabled -eq $true}
     foreach ($card in $networkCards) {
         if ($card.IPAddress -eq $null) {
-            Write-Host "Problème réseau détecté sur: $($card.Description)" -ForegroundColor Red
+            Write-Host "Problème reseau detecte sur: $($card.Description)" -ForegroundColor Red
         } else {
-            Write-Host "Connexion réseau active sur: $($card.Description)" -ForegroundColor Green
+            Write-Host "Connexion reseau active sur: $($card.Description)" -ForegroundColor Green
         }
     }
 }
@@ -52,11 +52,11 @@ function Check-SystemPerformance {
     $totalMem = [math]::Round($totalMemory.TotalPhysicalMemory / 1GB, 2)
 
     Write-Host "Utilisation du CPU: $cpuUsage%"
-    Write-Host "Mémoire Totale: $totalMem GB - Mémoire Disponible: $freeMemory MB"
+    Write-Host "Memoire Totale: $totalMem GB - Memoire Disponible: $freeMemory MB"
 }
 
 # Exécution des vérifications
-Write-Host "Début de l'analyse du matériel et détection des problèmes..."
+Write-Host "Debut de l'analyse du materiel et detection des problemes..."
 Check-DeviceStatus
 Check-DiskHealth
 Check-NetworkStatus

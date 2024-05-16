@@ -31,34 +31,32 @@ function Get-RAMUsage {
     return $ramUsage
 }
 
-# Fonction pour rééquilibrer les VM en fonction de la charge RAM
-function Rebalance-VMs {
+# Fonction pour rééquilibrer les VDIs en fonction de la charge RAM
+function Rebalance-VDIs {
     $ramUsage = Get-RAMUsage
     $max = $ramUsage.Values | Measure-Object -Maximum
     $min = $ramUsage.Values | Measure-Object -Minimum
     $diff = $max.Maximum - $min.Minimum
 
-    if ($diff -gt 25) { # Seuil de différence de pourcentage pour le rééquilibrage
+    if ($diff -gt 10) { # Seuil de différence de pourcentage pour le rééquilibrage
         $hostMostRAMUsed = $ramUsage.GetEnumerator() | Where-Object {$_.Value -eq $max.Maximum} | Select-Object -First 1
         $hostLeastRAMUsed = $ramUsage.GetEnumerator() | Where-Object {$_.Value -eq $min.Minimum} | Select-Object -First 1
 
         $leastRAMHostDatastore = Get-Datastore -VMHost $hostLeastRAMUsed.Name | Sort-Object -Property FreeSpaceGB -Descending | Select-Object -First 1
 
-        # Sélection des VM à déplacer
-        $vmsToMove = Get-VM -Location $hostMostRAMUsed.Name | Where-Object {
-            $_.PowerState -eq "PoweredOff"
-        } | Select-Object -First [int]($diff / 5) 
-        
-        foreach ($vm in $vmsToMove) {
-            $vmName = $vm.Name
-            $vmConfig = Get-VM $vm | Select-Object -Property DiskGB, MemoryGB, NumCpu, NetworkName, GuestId
-            Move-VM -VM $vm -Destination $hostLeastRAMUsed.Name -Datastore $leastRAMHostDatastore.Name -Confirm:$false
+        # Sélection des VDIs à déplacer qui n'ont pas d'utilisateur actif et suivent le format nommé
+        $vdisToMove = Get-VM -Location $hostMostRAMUsed.Name | Where-Object {
+            $_.Name -match "^NEXIS-XD-T\d{2}$" -and $_.PowerState -eq "PoweredOff"
+        } | Select-Object -First [int]($diff / 2) # On déplace un nombre de VDIs basé sur la moitié de la différence de pourcentage
+
+        foreach ($vdi in $vdisToMove) {
+            Move-VM -VM $vdi -Destination $hostLeastRAMUsed.Name -Datastore $leastRAMHostDatastore.Name -Confirm:$false
         }
     }
 }
 
 Connect-VCenter
-Rebalance-VMs
+Rebalance-VDIs
 
 # Déconnexion
 Disconnect-VIServer -Server $serverAddress -Confirm:$false

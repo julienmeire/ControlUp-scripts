@@ -1,10 +1,11 @@
 param(
-    [string]$vmName,      
-    [string]$sourceEsxi,              
-    [string]$destinationEsxi,       
-    [string]$vCenter,                 
-    [string]$username,                 
-    [string]$password                  
+    [string]$vmName,
+    [string]$hoteEsxi,
+    [string]$destinationEsxi,
+    [string]$vCenter,
+    [string]$user,
+    [string]$credentials
+)
 
 # Importe le module VMware PowerCLI
 Import-Module VMware.PowerCLI
@@ -13,21 +14,46 @@ Import-Module VMware.PowerCLI
 Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -Confirm:$false
 
 # Connexion au vCenter
-Connect-VIServer -Server $vCenter -User $username -Password $password
+try {
+    $connection = Connect-VIServer -Server $vCenter -User $user -Password $credentials -ErrorAction Stop
+    Write-Output "Connexion réussie au vCenter '$vCenter'."
+} catch {
+    Write-Output "Erreur de connexion au vCenter '$vCenter': $($_.Exception.Message)"
+    exit
+}
 
-# Récupére l'objet VM
+# Récupère l'objet VM
 $vm = Get-VM -Name $vmName
+if (-not $vm) {
+    Write-Output "VM '$vmName' non trouvée. Vérifiez le nom et essayez à nouveau."
+    Disconnect-VIServer -Server $vCenter -Confirm:$false
+    exit
+}
 
-# Récupére l'objet hôte ESXi de destination
+# Vérifie si l'hôte de destination existe
 $destinationHost = Get-VMHost -Name $destinationEsxi
+if (-not $destinationHost) {
+    Write-Output "Hôte ESXi de destination '$destinationEsxi' non trouvé. Vérifiez le nom et essayez à nouveau."
+    Disconnect-VIServer -Server $vCenter -Confirm:$false
+    exit
+}
 
-# Vérifie si l'objet VM et l'hôte de destination existent
+# Verifie que l esxi hote et destination sont differents
+    If ($hoteEsxi -eq $destinationEsxi) {
+        Write-Output "impossible de migrer sur le meme hote"
+    }
+
+
+# Vérifie si la VM et l'hôte de destination existent pour procéder à la migration
 if ($vm -and $destinationHost) {
-    # Lancer la migration de la VM vers l'hôte de destination
-    Move-VM -VM $vm -Destination $destinationHost
-    Write-Output "La VM '$vmName' a été migrée vers l'hôte '$destinationEsxi'."
+    try {
+        Move-VM -VM $vm -Server $vCenter -Destination $destinationHost -ErrorAction Stop
+        Write-Output "La VM '$vmName' a été migrée avec succès vers l'hôte '$destinationEsxi'"
+    } catch {
+        Write-Output "Erreur lors de la migration de la VM : $($_.Exception.Message)"
+    }
 } else {
-    Write-Output "Erreur : Vérifiez que le nom de la VM et l'hôte de destination sont corrects."
+    Write-Output "Échec de la migration : Vérifiez que le nom de la VM et l'hôte de destination sont corrects."
 }
 
 # Déconnexion du vCenter

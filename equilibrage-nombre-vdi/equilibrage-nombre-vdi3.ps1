@@ -77,9 +77,28 @@ Write-Host "L'ESXi avec la plus petite charge : $($minLoadHost.Name), avec une c
 $highLoadHosts = $hostCpuLoads.Keys | Where-Object { $hostCpuLoads[$_] -gt ($averageCpuUsage * 1.03)}
 
 foreach ($vmhost in $highLoadHosts) {
-    Write-Host "aa : $vmhost.Name"
+    Write-Host "esxi au dessus de la moyenne : $vmhost"
 }
 
+function Get-VMCpuUsage {
+    param (
+        [VMware.VimAutomation.ViCore.Types.V1.Inventory.VirtualMachine]$VM
+    )
+    try {
+        # Récupérer les statistiques de CPU pour les dernières 24 heures
+        $cpuStats = Get-Stat -Entity $VM -Stat cpu.usage.average -Start (Get-Date).AddHours(-24) -Finish (Get-Date) -MaxSamples 1 -ErrorAction Stop
+        if ($cpuStats) {
+            $cpuUsage = ($cpuStats | Measure-Object -Property Value -Average).Average
+            return $cpuUsage
+        } else {
+            Write-Error "Aucune donnée de statistique CPU trouvée pour la VM: $($VM.Name)"
+            return $null
+        }
+    } catch {
+        Write-Error "Erreur lors de la récupération des statistiques CPU pour la VM: $($VM.Name), $_"
+        return $null
+    }
+}
 
 foreach ($hostName in $highLoadHosts) {
     # Récupérer les VMs à migrer de cet hôte
@@ -100,14 +119,14 @@ foreach ($hostName in $highLoadHosts) {
         while ($hostCpuLoads[$hostName] -gt ($averageCpuUsage * 1.03) -and $vmsToMigrate.Count -gt 0) {
             foreach ($vm in $vmsToMigrate) {
                 $vmCpuUsage = Get-VMCpuUsage -VM $vm
-                $vmCpuShare = [math]::Round(($vmCpuUsage / $hostCpuCapacity) * 100, 3)
+                $vmCpuShare = [math]::Round(($vmCpuUsage / $hostCpuCapacity), 3)
                 
                 Write-Host "VM à migrer de l'hôte $hostName : $($vm.Name), Part du CPU de l'hôte utilisée : $vmCpuShare%"
                 
                 if ($minLoadHost) {
-                    Move-VM -VM $vm -Destination $minLoadHost -RunAsync
-                    Write-Host "Migrating $($vm.Name) from $hostName to $minLoadHost"
-                    
+                    Move-VM -VM $vm -Destination $($minLoadHost.Name)
+                    Write-Host "Migrating $($vm.Name) from $hostName to $($minLoadHost.Name)"
+                    $vmsToMigrate = $vmsToMigrate | Where-Object { $_.Id -ne $vm.Id }
                     # Mettre à jour les charges estimées
                     $hostCpuLoads[$hostName] -= $vmCpuUsage
                     $hostCpuLoads[$minLoadHost] += $vmCpuUsage

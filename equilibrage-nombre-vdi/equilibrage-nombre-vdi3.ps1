@@ -1,25 +1,23 @@
-param (
-  [string]$vCenter,
-  [string]$user,
-  [string]$password
-)
+$vCenter = "Nexis-VCSA-001.wavre.nexis.be"
+$user = "svc_ControlUp@vsphere.local"
+$password = "Tigrou007!"
 
 try {
     $connection = Connect-VIServer -Server $vCenter -User $user -Password $password -ErrorAction Stop
-    Write-Host "Connecté avec succès à vCenter: $vCenter"
+    Write-Host "Connecte avec succes au vCenter: $vCenter"
 } catch {
-    Write-Error "Erreur lors de la connexion à vCenter: $_"
+    Write-Error "Erreur lors de la connexion au vCenter: $_"
     exit
 }
 
-# Récupérer les informations des ESXi dans le cluster "HA et DRS" et exclure le serveur spécifique
+# Récupérer les informations des ESXi dans le cluster "HA et DRS" et exclure l'esxi 004
 $clusterName = "Cluster HA & DRS"
 try {
     $cluster = Get-Cluster -Name $clusterName -ErrorAction Stop
     $hosts = Get-VMHost -Location $cluster -ErrorAction Stop | Where-Object { $_.Name -ne 'nexis-esxi-004.wavre.nexis.be' }
-    Write-Host "Informations récupérées pour le cluster: $clusterName"
+    Write-Host "Informations recuperees pour le cluster: $clusterName"
 } catch {
-    Write-Error "Erreur lors de la récupération des informations du cluster: $_"
+    Write-Error "Erreur lors de la recuperation des informations du cluster: $_"
     Disconnect-VIServer -Server $vCenter -Confirm:$false
     exit
 }
@@ -32,7 +30,7 @@ $hostCount = 0
 foreach ($vmhost in $hosts) {
     try {
         # Récupérer tous les échantillons disponibles pour les dernières 24 heures
-        $cpuUsages = Get-Stat -Entity $vmhost -Stat cpu.usage.average -Start (Get-Date).AddHours(-24) -Finish (Get-Date) -ErrorAction Stop
+        $cpuUsages = Get-Stat -Entity $vmhost -Stat cpu.usage.average -Start (Get-Date).AddMinutes(-5) -Finish (Get-Date) -ErrorAction Stop
 
         # Calculer la moyenne des valeurs de CPU usage
         $cpuUsageTotal = 0
@@ -49,7 +47,7 @@ foreach ($vmhost in $hosts) {
             $hostCount++
         }
     } catch {
-        Write-Error "Erreur lors de la récupération de la moyenne de la charge CPU pour $($vmhost.Name): $_"
+        Write-Error "Erreur lors de la recuperation de la moyenne de la charge CPU pour $($vmhost.Name): $_"
     }
 }
 
@@ -60,11 +58,11 @@ if ($hostCount -gt 0) {
     # Identifier les hôtes avec une charge CPU supérieure à la moyenne
     foreach ($hostName in $hostCpuLoads.Keys) {
         if ($hostCpuLoads[$hostName] -gt $averageCpuUsage) {
-            Write-Host "$hostName a une charge CPU supérieure à la moyenne : $($hostCpuLoads[$hostName])%"
+            Write-Host "$hostName a une charge CPU superieure à la moyenne : $($hostCpuLoads[$hostName])%"
         }
     }
 } else {
-    Write-Error "Aucune moyenne de charge CPU récupérée, arrêt du script."
+    Write-Error "Aucune moyenne de charge CPU recuperee, arret du script."
     Disconnect-VIServer -Server $vCenter -Confirm:$false
     exit
 }
@@ -86,16 +84,16 @@ function Get-VMCpuUsage {
     )
     try {
         # Récupérer les statistiques de CPU pour les dernières 24 heures
-        $cpuStats = Get-Stat -Entity $VM -Stat cpu.usage.average -Start (Get-Date).AddHours(-24) -Finish (Get-Date) -MaxSamples 1 -ErrorAction Stop
+        $cpuStats = Get-Stat -Entity $VM -Stat cpu.usage.average -Start (Get-Date).AddMinutes(-5) -Finish (Get-Date) -MaxSamples 1 -ErrorAction Stop
         if ($cpuStats) {
             $cpuUsage = ($cpuStats | Measure-Object -Property Value -Average).Average
             return $cpuUsage
         } else {
-            Write-Error "Aucune donnée de statistique CPU trouvée pour la VM: $($VM.Name)"
+            Write-Error "Aucune donnee de statistique CPU trouvee pour la VM: $($VM.Name)"
             return $null
         }
     } catch {
-        Write-Error "Erreur lors de la récupération des statistiques CPU pour la VM: $($VM.Name), $_"
+        Write-Error "Erreur lors de la recuperation des statistiques CPU pour la VM: $($VM.Name), $_"
         return $null
     }
 }
@@ -104,36 +102,33 @@ foreach ($hostName in $highLoadHosts) {
     # Récupérer les VMs à migrer de cet hôte
     $vmsToMigrate = Get-VM -Location $hostName | Where-Object { $_.Name -like "Nexis-XD-T*" }
     foreach ($vm in $vmsToMigrate) {
-        Write-Host "VM à migrer de l'hôte $hostName : $($vm.Name)"
+        Write-Host "VM a migrer de l'hote $hostName : $($vm.Name)"
     }
 
 
     # Vérification si aucune VM n'a été trouvée pour cet hôte
     if ($vmsToMigrate.Count -eq 0) {
-        Write-Host "Aucune VM correspondant aux critères n'a été trouvée sur l'hôte $hostName."
+        Write-Host "Aucune VM correspondant aux criteres n a ete trouvee sur l'hôte $hostName."
     }
 
     $hostCpuCapacity = $hostCpuLoads[$hostName]
 
-    foreach ($vm in $vmsToMigrate) {
-        while ($hostCpuLoads[$hostName] -gt ($averageCpuUsage * 1.03) -and $vmsToMigrate.Count -gt 0) {
-            foreach ($vm in $vmsToMigrate) {
-                $vmCpuUsage = Get-VMCpuUsage -VM $vm
-                $vmCpuShare = [math]::Round(($vmCpuUsage / $hostCpuCapacity), 3)
+      
+        foreach ($vm in $vmsToMigrate) {
+            $vmCpuUsage = Get-VMCpuUsage -VM $vm
+            $vmCpuShare = [math]::Round(($vmCpuUsage / $hostCpuCapacity), 3)
                 
-                Write-Host "VM à migrer de l'hôte $hostName : $($vm.Name), Part du CPU de l'hôte utilisée : $vmCpuShare%"
+            Write-Host "La VM : $($vm.Name) consomme : $vmCpuShare% de l'hote $hostName"
                 
-                if ($minLoadHost) {
-                    Move-VM -VM $vm -Destination $($minLoadHost.Name)
-                    Write-Host "Migrating $($vm.Name) from $hostName to $($minLoadHost.Name)"
-                    $vmsToMigrate = $vmsToMigrate | Where-Object { $_.Id -ne $vm.Id }
-                    # Mettre à jour les charges estimées
-                    $hostCpuLoads[$hostName] -= $vmCpuUsage
-                    $hostCpuLoads[$minLoadHost] += $vmCpuUsage
-                } else {
-                    Write-Host "No host with lower load available for migration."
-                }
+            if ($minLoadHost) {
+                Move-VM -VM $vm -Destination $($minLoadHost.Name)
+                Write-Host "Migrating $($vm.Name) from $hostName to $($minLoadHost.Name)"
+                $vmsToMigrate = $vmsToMigrate | Where-Object { $_.Id -ne $vm.Id }
+                # Mettre à jour les charges estimées
+                $hostCpuLoads[$hostName] -= $vmCpuUsage
+                $hostCpuLoads[$minLoadHost] += $vmCpuUsage
+            } else {
+                Write-Host "Aucun hote disponible pour la migration"
             }
         }
     }
-}

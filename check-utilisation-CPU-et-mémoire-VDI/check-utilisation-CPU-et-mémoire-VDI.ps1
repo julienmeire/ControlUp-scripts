@@ -27,9 +27,9 @@ $results | Format-Table -AutoSize
 
 try {
     # Tente d'enregistrer les résultats dans un fichier CSV
-    $results | Export-Csv -Path "VDIUsageReport.csv" -NoTypeInformation
-    Write-Host "Les données ont été enregistrées dans 'VDIUsageReport.csv'"
+    $results | Export-Csv -Path "C:\Users\jme\Downloads\PhysicalMachineUsageReport.csv" -NoTypeInformation
+    Write-Host "Les donnees ont ete enregistrees dans 'C:\Users\jme\Downloads\PhysicalMachineUsageReport.csv'"
 } catch {
     # Affiche un message d'erreur si l'enregistrement échoue
-    Write-Host "Erreur lors de l'enregistrement des données : $_"
+    Write-Host "Erreur lors de l'enregistrement des donnees : $_"
 }

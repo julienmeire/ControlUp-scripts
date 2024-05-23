@@ -1,6 +1,6 @@
-$vCenter = "Nexis-VCSA-001.wavre.nexis.be"
-$user = "svc_ControlUp@vsphere.local"
-$password = "Tigrou007!"
+$vCenter = "fqdn"
+$user = "tonuser"
+$password = "mdpici!"
 
 try {
     $connection = Connect-VIServer -Server $vCenter -User $user -Password $password -ErrorAction Stop
@@ -29,7 +29,7 @@ $hostCount = 0
 
 foreach ($vmhost in $hosts) {
     try {
-        # Récupérer tous les échantillons disponibles pour les dernières 24 heures
+        # Récupérer tous les échantillons disponibles pour les dernières 5 minutes
         $cpuUsages = Get-Stat -Entity $vmhost -Stat cpu.usage.average -Start (Get-Date).AddMinutes(-5) -Finish (Get-Date) -ErrorAction Stop
 
         # Calculer la moyenne des valeurs de CPU usage
